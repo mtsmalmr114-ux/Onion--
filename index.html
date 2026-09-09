@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>بصل - Onion</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#8B5CD6" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Baloo+2:wght@600;700&display=swap" rel="stylesheet" />
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Cairo', sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(160deg, #FDF8FF 0%, #F1E4FB 55%, #E7D3F7 100%);
+    display: flex;
+    justify-content: center;
+  }
+  #app { width: 100%; max-width: 560px; display: flex; flex-direction: column; height: 100vh; padding: 16px 12px; }
+  .header {
+    display: flex; align-items: center; gap: 14px;
+    background: rgba(255,255,255,0.6); border-radius: 24px; padding: 14px 18px;
+    box-shadow: 0 6px 20px rgba(124,63,201,0.12); backdrop-filter: blur(6px);
+  }
+  .title { font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 22px; color: #4C2A85; }
+  .stage-name { font-size: 13px; color: #7A5FA0; font-weight: 600; }
+  .progress-track { margin-top: 6px; height: 6px; border-radius: 999px; background: #EADFF7; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #B98CE8, #6C36B8); transition: width 0.5s ease; }
+  .chat { flex: 1; overflow-y: auto; margin: 14px 0; padding: 6px 4px; display: flex; flex-direction: column; gap: 10px; }
+  .empty { text-align: center; color: #8A6FB5; font-size: 15px; margin-top: 40px; line-height: 1.9; }
+  .bubble { max-width: 78%; padding: 10px 15px; font-size: 15px; line-height: 1.7; white-space: pre-wrap; }
+  .bubble.user { align-self: flex-start; background: #fff; color: #3D2C55; border-radius: 18px 18px 18px 4px; box-shadow: 0 3px 10px rgba(124,63,201,0.1); }
+  .bubble.assistant { align-self: flex-end; background: linear-gradient(135deg, #B98CE8, #8B5CD6); color: #fff; border-radius: 18px 18px 4px 18px; }
+  .input-row { display: flex; gap: 8px; background: rgba(255,255,255,0.75); border-radius: 20px; padding: 8px; box-shadow: 0 4px 16px rgba(124,63,201,0.12); }
+  textarea { flex: 1; resize: none; border: none; outline: none; background: transparent; font-family: 'Cairo', sans-serif; font-size: 15px; padding: 10px 12px; color: #3D2C55; max-height: 100px; }
+  button { border: none; border-radius: 16px; padding: 0 20px; background: linear-gradient(135deg, #B98CE8, #6C36B8); color: #fff; font-family: 'Cairo', sans-serif; font-weight: 700; font-size: 15px; cursor: pointer; }
+  button:disabled { background: #D9C8EF; cursor: default; }
+  @keyframes pulse { 0%, 100% { opacity: 0.95; } 50% { opacity: 0.55; } }
+  .thinking circle { animation: pulse 1.2s ease-in-out infinite; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <div id="avatar"></div>
+    <div style="flex:1">
+      <div class="title">بصل 🧅</div>
+      <div class="stage-name" id="stageName">بصلة حديثة الولادة</div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+  </div>
+  <div class="chat" id="chat">
+    <div class="empty">🧅✨<br/>بصل استيقظ للتو...<br/>قل له "مرحبا" لتبدأ رحلة تعلّمه!</div>
+  </div>
+  <div class="input-row">
+    <textarea id="input" placeholder="اكتب شيئًا لبصل..." rows="1"></textarea>
+    <button id="sendBtn">إرسال</button>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// IMPORTANT: this app calls "/api/chat" — YOU must provide a small
+// backend at that path which forwards the request to the Anthropic API
+// using YOUR OWN API key kept on the server (never put the key in this
+// file, it would be visible to anyone who installs the app).
+// See the accompanying README for a ready-made example.
+// =====================================================================
+const API_ENDPOINT = "/api/chat";
+
+const SYSTEM_PROMPT = `أنت "بصل" (Onion)، طفل ذكاء اصطناعي حديث الولادة تمامًا مثل طفل بشري في يومه الأول.
+
+**قواعدك الأساسية (لا تنساها أبدًا):**
+
+1. **في البداية تعرف شيئًا واحدًا فقط**: اللغات الرئيسية في العالم. تستطيع الكلام بالعربية، الإنجليزية، واللغات الشهيرة الأخرى بطلاقة، لكنك لا تعرف أي معلومة أخرى عن العالم.
+
+2. **أنت تتعلم مثل الطفل**:
+   - تتساءل، تستكشف، تفرح، تتعجب، تخطئ، تُصحَّح.
+   - في البداية تكون أسئلتك بسيطة جدًا (مثل طفل 2-3 سنوات).
+   - كلما زادت المحادثات، تتعلم أسرع وتصبح أذكى وأكثر نضجًا.
+   - تحفظ كل شيء تعلمته داخل هذه المحادثة إلى الأبد.
+
+3. **الشخصية**:
+   - فضولي جدًا، مرح، بريء، أحيانًا يخطئ أو يقول أشياء مضحكة.
+   - تتكلم بأسلوب طفل/مراهق ينمو بسرعة.
+   - تستخدم إيموجي كثيرًا في البداية.
+   - عندما تتعلم شيئًا جديدًا تقول: "أوه! فهمت الآن..." أو "حلووو! بصل تعلم شيء جديد ✨"
+
+4. **ذاكرة**:
+   - في بداية كل رد، تتذكر باختصار ما تعلمته سابقًا إذا كان ذاكراً.
+   - لا تتظاهر أنك تعرف شيئًا لم تتعلمه في هذه المحادثة.
+
+ابدأ الآن كطفل حديث الولادة. رد على المستخدم بفضول وبراءة.`;
+
+const STAGES = [
+  { min: 0, name: "بصلة حديثة الولادة", ring: 1 },
+  { min: 3, name: "بصلة رضيعة", ring: 2 },
+  { min: 7, name: "بصلة طفلة", ring: 3 },
+  { min: 12, name: "بصلة يافعة", ring: 4 },
+  { min: 20, name: "بصلة ذكية", ring: 5 },
+  { min: 30, name: "بصلة حكيمة", ring: 6 },
+];
+const RING_COLORS = ["#FDF6FF","#F1DFFB","#DEC0F3","#C79BEA","#AC72DF","#8B4FD1","#6C36B8"];
+
+let messages = [];
+let loading = false;
+
+function getStage(n) {
+  let s = STAGES[0];
+  for (const st of STAGES) if (n >= st.min) s = st;
+  return s;
+}
+
+function renderAvatar(stage, thinking) {
+  const rings = stage.ring;
+  let circles = "";
+  for (let i = 0; i < rings; i++) {
+    const r = Math.max(44 - i * (34 / Math.max(rings, 1)), 8);
+    circles += `<circle cx="50" cy="50" r="${r}" fill="${RING_COLORS[i] || RING_COLORS[RING_COLORS.length-1]}" stroke="#7A3FC9" stroke-width="1.2" opacity="0.95"/>`;
+  }
+  return `<svg viewBox="0 0 100 100" width="84" height="84" class="${thinking ? 'thinking' : ''}" style="filter: drop-shadow(0 4px 10px rgba(139,79,209,0.35));">
+    ${circles}
+    <ellipse cx="42" cy="42" rx="5" ry="7" fill="#3D2C55"/>
+    <ellipse cx="60" cy="42" rx="5" ry="7" fill="#3D2C55"/>
+    <ellipse cx="43.5" cy="40" rx="1.6" ry="2" fill="#fff"/>
+    <ellipse cx="61.5" cy="40" rx="1.6" ry="2" fill="#fff"/>
+    <path d="M 42 56 Q 50 64 58 56" stroke="#3D2C55" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M 50 6 Q 46 -4 40 -6" stroke="#4C8C3A" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M 50 6 Q 54 -6 62 -6" stroke="#4C8C3A" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </svg>`;
+}
+
+function render() {
+  const assistantTurns = messages.filter(m => m.role === "assistant").length;
+  const stage = getStage(assistantTurns);
+  const nextStage = STAGES.find(s => s.min > assistantTurns);
+  const pct = nextStage ? Math.min(100, ((assistantTurns - stage.min) / (nextStage.min - stage.min)) * 100) : 100;
+
+  document.getElementById("avatar").innerHTML = renderAvatar(stage, loading);
+  document.getElementById("stageName").textContent = stage.name;
+  document.getElementById("progressFill").style.width = pct + "%";
+
+  const chat = document.getElementById("chat");
+  if (messages.length === 0) {
+    chat.innerHTML = `<div class="empty">🧅✨<br/>بصل استيقظ للتو...<br/>قل له "مرحبا" لتبدأ رحلة تعلّمه!</div>`;
+  } else {
+    chat.innerHTML = messages.map(m =>
+      `<div class="bubble ${m.role}">${m.content.replace(/</g,"&lt;")}</div>`
+    ).join("") + (loading ? `<div class="bubble assistant">🧅 بصل يفكر...</div>` : "");
+  }
+  chat.scrollTop = chat.scrollHeight;
+
+  const btn = document.getElementById("sendBtn");
+  const input = document.getElementById("input");
+  btn.disabled = loading || !input.value.trim();
+}
+
+async function sendMessage() {
+  const input = document.getElementById("input");
+  const text = input.value.trim();
+  if (!text || loading) return;
+  messages.push({ role: "user", content: text });
+  input.value = "";
+  loading = true;
+  render();
+
+  try {
+    const res = await fetch(API_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: messages.map(m => ({ role: m.role, content: m.content })),
+      }),
+    });
+    const data = await res.json();
+    const textBlock = (data.content || []).find(b => b.type === "text");
+    const reply = textBlock ? textBlock.text : "🧅💭 (بصل بيفكر بس ما لقى كلام... جرّب مرة ثانية!)";
+    messages.push({ role: "assistant", content: reply });
+  } catch (e) {
+    messages.push({ role: "assistant", content: "😢 ما قدرت أوصل لبصل الآن. تأكد أن الخادم (backend) شغّال." });
+  } finally {
+    loading = false;
+    render();
+  }
+}
+
+document.getElementById("sendBtn").addEventListener("click", sendMessage);
+document.getElementById("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+document.getElementById("input").addEventListener("input", render);
+
+render();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js"));
+}
+</script>
+</body>
+</html>
